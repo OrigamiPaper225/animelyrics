@@ -37,40 +37,80 @@ def search_lyrics(query, lang="jp", show_title=False):
     :rtype: str
     :return: String of lyrics in given language
     """
-    if lang != "en" and lang != "jp":
+    if lang != "en" and lang != "jp" and lang != "jp-kanji":
         raise InvalidLanguage("Unsupported language type")
 
     if lang == "jp":
         class_name = "romaji"
         song_idx = 0
+    if lang == "jp-kanji":
+        class_name = "kanji"
+        song_idx = 0
     elif lang == "en":
         class_name = "translation"
         song_idx = 1
 
-    url = get_lyrics_url(query)
+    url1 = get_1lyrics_url(query)
+    url2 = get_2lyrics_url(query)
 
-    soup = get_lyrics_soup(url)
+    soup = get_lyrics_soup(url1)
+    soup2 = get_lyrics_soup(url2)
 
-    center_box = soup.find("div", {"class": "centerbox"})
-    lyrics_table = center_box.find("table")
-    lyrics = ""
+    if lang == "jp" or lang == "en":
+        center_box = soup.find("div", {"class": "centerbox"})
+        lyrics_table = center_box.find("table")
+        lyrics = ""
+        jplyrics = ""
+        enlyrics = ""
+        kanjilyrics = ""
 
-    if lyrics_table is None:
-        if lang == "en":
-            raise MissingTranslatedLyrics("No translated lyrics found")
+        if lyrics_table is None:
+            if lang == "en":
+                raise MissingTranslatedLyrics("No translated lyrics found")
 
-        lyrics = center_box.find("span", {"class": "lyrics"}).get_text()
-    else:
-        lyrics_divs = lyrics_table.find_all("td", {"class": class_name})
-        for div in lyrics_divs:
-            lyrics += div.get_text()
+            lyrics = center_box.find("span", {"class": "lyrics"}).get_text()
+        else:
+            jplyrics_divs = lyrics_table.find_all("td", {"class": "romaji"})
+            enlyrics_divs = lyrics_table.find_all("td", {"class": "translation"})
+            for div in jplyrics_divs:
+                jplyrics += div.get_text()
+            for div in enlyrics_divs:
+                enlyrics += div.get_text()
+
+        kanjilyrics = soup2.find("div",{"id":"kanji"}).get_text()
 
     # remove trailing spaces and weird space
-    lyrics = lyrics.replace("\xa0", " ").strip()
+    enlyrics = enlyrics.replace("\xa0", " ").strip()
+    jplyrics = jplyrics.replace("\xa0", " ").strip()
+    kanjilyrics = kanjilyrics.replace("\xa0", " ").strip()
 
-    # remove whitespaces from each line
-    stripped_lines = [line.strip() for line in lyrics.splitlines()]
-    lyrics = "\n".join(stripped_lines)
+     # remove whitespaces from each line
+    enstripped_lines = [line.strip() for line in enlyrics.splitlines()]
+    jpstripped_lines = [line.strip() for line in jplyrics.splitlines()]
+    kanjistripped_lines = [line.strip() for line in kanjilyrics.splitlines()]
+    enlyrics = "\n".join(enstripped_lines)
+    jplyrics = "\n".join(jpstripped_lines)
+    kanjilyrics = "\n".join(kanjistripped_lines)
+
+
+    enlyrics = enlyrics.splitlines()
+    jplyrics = jplyrics.splitlines()
+    kanjilyrics = kanjilyrics.splitlines()
+
+
+    for item in range(len(kanjilyrics)):
+        if kanjilyrics[item] == '' and kanjilyrics[item+1] == '' and kanjilyrics[item+2] == '':
+            kanjilyrics[item] = ''
+            kanjilyrics[item+1] = ''
+            kanjilyrics[item+2] = ' '
+
+
+    kanjilyrics = [space for space in kanjilyrics if space != '']
+
+
+    lyricstuples = zip(enlyrics,jplyrics,kanjilyrics)
+    finallyrics = '\n'.join(map(lambda x: str(x[0]) + '\n' + str(x[1]+ '\n' + str(x[2]) + '\n'), lyricstuples))
+    print(finallyrics)
 
     if show_title:
         song_name, anime_name = get_song_info(soup)
@@ -111,7 +151,10 @@ def get_lyrics_soup(url):
     :rtype: BeautifulSoup
     :return: BeautifulSoup4 object of the loaded url
     """
-    html_text = requests.get(url).text
+    html = requests.get(url)
+    html.encoding = html.apparent_encoding
+    html_text = html.content
+    #print(html_text)
     soup = BeautifulSoup(html_text, "lxml")
 
     # convert all br into newlines
@@ -128,7 +171,7 @@ def get_lyrics_soup(url):
     return soup
 
 
-def get_lyrics_url(query):
+def get_1lyrics_url(query):
     """
     Finds a url in AnimeLyrics website for a lyric
 
@@ -139,7 +182,35 @@ def get_lyrics_url(query):
     """
     for url in googlesearch.search("site:{} {}".format(__BASE_URL__, query), stop=10):
         # return the first page with .htm in the url as it contains lyrics
+        # if str(url).endswith(".jis"):
+        #     print (url)
+        #     return url
+        # else:
         if str(url).endswith(".htm"):
+
+            return url
+
+    # return none if query cannot find any pages
+    raise NoLyricsFound
+
+def get_2lyrics_url(query):
+    """
+    Finds a url in AnimeLyrics website for a lyric
+
+    :param str query: Query string.
+
+    :rtype: str
+    :return: String of the url page for the given query
+    """
+    for url in googlesearch.search("site:{} {}".format(__BASE_URL__, query), stop=10):
+        # return the first page with .htm in the url as it contains lyrics
+        # if str(url).endswith(".jis"):
+        #     print (url)
+        #     return url
+        # else:
+        if str(url).endswith(".htm"):
+            url = url.replace(".htm",".jis")
+            print(url)
             return url
 
     # return none if query cannot find any pages
