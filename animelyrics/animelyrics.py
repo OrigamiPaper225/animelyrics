@@ -122,7 +122,7 @@ def search_lyrics(query, lang="jp", show_title=False):
 
         return "{} - {}\n\n{}".format(song_name[song_idx], anime_name, lyrics)
     else:
-        return lyrics
+        return finallyrics
 
 
 def get_song_info(soup):
